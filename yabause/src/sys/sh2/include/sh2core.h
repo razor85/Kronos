@@ -23,6 +23,7 @@
 
 #include "core.h"
 #include "threads.h"
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {
