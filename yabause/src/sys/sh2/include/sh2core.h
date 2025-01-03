@@ -427,6 +427,25 @@ typedef struct
 } backtrace_struct;
 //END debug
 
+struct SH2_ProfilerStackInfo
+{
+  u32 address;
+  clock_t startTime;
+  long totalTime;
+};
+
+struct SH2_ProfilerInfo
+{
+  long time;
+  u32 count;
+};
+
+#define PROFILE_STACK_SIZE 4096
+#define PROFILE_NUM_INFOS 0xFFFF
+ 
+// TODO: Use application start addres and take into account slave as well.
+#define PROFILE_START_ADDRESS 0x06004000
+#define PROFILE_END_ADDRESS 0x0600FFFF
 
 void SH2IntcSetIrl(SH2_struct *sh, u8 irl, u8 d);
 void SH2IntcSetNmi(SH2_struct *sh);
@@ -522,6 +541,12 @@ typedef struct SH2_struct_s
     u32 isDelayed;
     u32 divcycles;
 //ENd debug
+
+    struct {
+      struct SH2_ProfilerInfo profile[PROFILE_NUM_INFOS];
+      struct SH2_ProfilerStackInfo stack[PROFILE_STACK_SIZE];
+      s32 stackPos;
+    } profilerInfo;
 } SH2_struct;
 
 typedef struct
