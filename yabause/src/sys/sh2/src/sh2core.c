@@ -680,6 +680,9 @@ int SH2ProfilerInit(SH2_struct* context)
   if (context)
   {
     context->profilerInfo.stackPos = -1;
+    context->profilerInfo.startMonitorAddress = 0x06002000;
+    context->profilerInfo.endMonitorAddress = 0x06104000;
+    context->profilerInfo.profilerEnabled = 0;
     memset(context->profilerInfo.profile, 0,
       PROFILE_NUM_INFOS * sizeof(struct SH2_ProfilerInfo));
 
@@ -709,7 +712,7 @@ void SH2ProfilerDeInit(SH2_struct *context)
       if (info->count > 0)
       {
         fprintf(ProfilerLogFile, "%d,%d,%x\n",
-          info->count, info->time, PROFILE_START_ADDRESS + i);
+          info->count, info->time, context->profilerInfo.startMonitorAddress + i);
       }
     }
   }

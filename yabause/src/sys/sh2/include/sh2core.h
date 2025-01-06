@@ -440,13 +440,9 @@ struct SH2_ProfilerInfo
   u32 count;
 };
 
-#define PROFILE_STACK_SIZE 4096
+#define PROFILE_STACK_SIZE 16384
 #define PROFILE_NUM_INFOS 0xFFFF
  
-// TODO: Use application start addres and take into account slave as well.
-#define PROFILE_START_ADDRESS 0x06004000
-#define PROFILE_END_ADDRESS 0x0600FFFF
-
 void SH2IntcSetIrl(SH2_struct *sh, u8 irl, u8 d);
 void SH2IntcSetNmi(SH2_struct *sh);
 void SH2EvaluateInterrupt(SH2_struct *sh);
@@ -546,6 +542,9 @@ typedef struct SH2_struct_s
       struct SH2_ProfilerInfo profile[PROFILE_NUM_INFOS];
       struct SH2_ProfilerStackInfo stack[PROFILE_STACK_SIZE];
       s32 stackPos;
+      u32 startMonitorAddress;
+      u32 endMonitorAddress;
+      u8 profilerEnabled;
     } profilerInfo;
 } SH2_struct;
 

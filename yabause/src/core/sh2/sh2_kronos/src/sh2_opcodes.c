@@ -39,31 +39,34 @@ extern void SH2ExecCb(SH2_struct *context);
 
 //////////////////////////////////////////////////////////////////////////////
 
-static u8 FASTCALL SH2ProfilerTrackAddr(u32 addr)
+static u8 FASTCALL SH2ProfilerTrackAddr(u32 addr, SH2_struct* sh)
 {
-  return addr >= PROFILE_START_ADDRESS
-    && addr < PROFILE_END_ADDRESS;
+  return addr >= sh->profilerInfo.startMonitorAddress 
+    && addr < sh->profilerInfo.endMonitorAddress;
 }
 
 static void FASTCALL SH2ProfilerTrack(SH2_struct* sh)
 {
-  const u32 pcAddr = sh->regs.PC;
-  if (SH2ProfilerTrackAddr(pcAddr))
-  {
-    assert(pcAddr >= PROFILE_START_ADDRESS);
+  if (!sh->profilerInfo.profilerEnabled) {
+    return;
+  }
 
-    const u32 addr = pcAddr - (u32)PROFILE_START_ADDRESS;
+  const u32 pcAddr = sh->regs.PC;
+  struct SH2_ProfilerStackInfo* info = NULL;
+
+  if (SH2ProfilerTrackAddr(pcAddr, sh))
+  {
+    const u32 addr = pcAddr - sh->profilerInfo.startMonitorAddress;
+    assert(pcAddr >= PROFILE_START_ADDRESS);
     assert(addr < PROFILE_NUM_INFOS);
 
     if (sh->profilerInfo.stackPos < PROFILE_STACK_SIZE)
     {
-      sh->profilerInfo.stackPos++;
+      ++sh->profilerInfo.stackPos;
       assert(sh->profilerInfo.stackPos >= 0);
       assert(sh->profilerInfo.stackPos < PROFILE_STACK_SIZE);
 
-      struct SH2_ProfilerStackInfo* info =
-        &sh->profilerInfo.stack[sh->profilerInfo.stackPos];
-
+      info = &sh->profilerInfo.stack[sh->profilerInfo.stackPos];
       info->address = addr;
       info->startTime = clock();
     }
@@ -72,6 +75,10 @@ static void FASTCALL SH2ProfilerTrack(SH2_struct* sh)
 
 static void FASTCALL SH2ProfilerStopTrack(SH2_struct* sh)
 {
+  if (!sh->profilerInfo.profilerEnabled) {
+    return;
+  }
+
   const s32 stackPos = sh->profilerInfo.stackPos;
   if (stackPos >= 0)
   {
@@ -82,12 +89,10 @@ static void FASTCALL SH2ProfilerStopTrack(SH2_struct* sh)
       &sh->profilerInfo.profile[stackInfo->address];
 
     info->time += clock() - stackInfo->startTime;
-    info->count++;
-    sh->profilerInfo.stackPos--;
+    ++info->count;
+    --sh->profilerInfo.stackPos;
   }
 }
-
-
 
 //////////////////////////////////////////////////////////////////////////////
 
