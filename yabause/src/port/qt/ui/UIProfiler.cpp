@@ -55,8 +55,8 @@ QString invokeAddr2LineAndFilt(u32 address, const QString& addr2line, const QStr
       if (cppFilt.isEmpty())
       {
          QString result(pStdout);
-         result.replace('\n', ' ');
-         result.replace('\r', ' ');
+         result.replace("\n", "");
+         result.replace("\r", "");
          return result;
       }
       else {
@@ -86,8 +86,8 @@ QString invokeAddr2LineAndFilt(u32 address, const QString& addr2line, const QStr
             }
          }
 
-         result.replace('\n', ' ');
-         result.replace('\r', ' ');
+         result.replace("\n", "");
+         result.replace("\r", "");
          return result;
       }
    }
