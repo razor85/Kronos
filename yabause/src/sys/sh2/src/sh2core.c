@@ -41,9 +41,6 @@ static void WDTExec(SH2_struct *context);
 u8 SCIReceiveByte(void);
 void SCITransmitByte(u8);
 
-FILE* ProfilerLogFile = NULL;
-const char* ProfilerLogFilename = "kronos_profiler.csv";
-
 void enableCache(SH2_struct *ctx);
 void disableCache(SH2_struct *ctx);
 void InvalidateCache(SH2_struct *ctx);
@@ -57,8 +54,6 @@ void DMATransferCycles(SH2_struct *context, Dmac * dmac, int cycles);
 int DMAProc(SH2_struct *context, int cycles );
 
 // Profiler forward declaration
-int SH2ProfilerInitResetFile();
-int SH2ProfilerDeInitResetFile();
 int SH2ProfilerInit(SH2_struct* context);
 void SH2ProfilerDeInit(SH2_struct *context);
 
@@ -246,9 +241,6 @@ int SH2Init(int coreid)
    if (SH2TrackInfLoopInit(MSH2) != 0)
       return -1;
 
-   if (SH2ProfilerInitResetFile() != 0)
-     return -1;
-
    if (SH2ProfilerInit(MSH2) != 0)
       return -1;
 
@@ -365,7 +357,6 @@ void SH2DeInit()
       free(SSH2);
    }
 
-   SH2ProfilerDeInitResetFile();
    SSH2 = NULL;
 }
 
@@ -650,31 +641,6 @@ void SH2NMI(SH2_struct *context)
 
 //////////////////////////////////////////////////////////////////////////////
 
-int SH2ProfilerInitResetFile()
-{
-  ProfilerLogFile = fopen(ProfilerLogFilename, "w");
-  if (ProfilerLogFile != NULL)
-  {
-    (void)fprintf(ProfilerLogFile, "Count,Time(ms),Ptr(H)\n");
-    return 0;
-  }
-  else
-  {
-    return -1;
-  }
-}
-
-int SH2ProfilerDeInitResetFile()
-{
-  if (ProfilerLogFile)
-  {
-    (void)fclose(ProfilerLogFile);
-    ProfilerLogFile = NULL;
-  }
-
-  return 0;
-}
-
 int SH2ProfilerInit(SH2_struct* context)
 {
   if (context)
@@ -701,21 +667,15 @@ int SH2ProfilerInit(SH2_struct* context)
 
 void SH2ProfilerDeInit(SH2_struct *context)
 {
-  if (!context)
-    return;
+   if (!context)
+     return;
 
-  if (ProfilerLogFile)
-  {
-    for (u32 i = 0; i < PROFILE_NUM_INFOS; ++i)
-    {
+   for (u32 i = 0; i < PROFILE_NUM_INFOS; ++i)
+   {
       SH2_ProfilerInfo* info = &context->profilerInfo.profile[i];
-      if (info->count > 0)
-      {
-        fprintf(ProfilerLogFile, "%d,%llu,%x\n",
-          info->count, (u64)info->time, context->profilerInfo.startMonitorAddress + i);
-      }
-    }
-  }
+      info->time = 0;
+      info->count = 0;
+   }
 }
 
 //////////////////////////////////////////////////////////////////////////////

@@ -1175,6 +1175,10 @@ void UIYabause::on_aProfilerToggle_triggered() {
    if (mYabauseThread->init() == 0 && MSH2 && SSH2) {
       MSH2->profilerInfo.profilerEnabled ^= 1;
       SSH2->profilerInfo.profilerEnabled ^= 1;
+      YuiMsg( "Master profiler %s\n",
+         MSH2->profilerInfo.profilerEnabled ? "enabled" : "disabled" );
+      YuiMsg( "Slave profiler %s\n",
+         SSH2->profilerInfo.profilerEnabled ? "enabled" : "disabled" );
    } else {
       QMessageBox::critical(this, "Error", "Please start emulation first");
    }

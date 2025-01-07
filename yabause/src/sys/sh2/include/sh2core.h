@@ -436,7 +436,6 @@ typedef struct
 {
   double time;
   u32 count;
-  u32 address;
 } SH2_ProfilerInfo;
 
 #define PROFILE_STACK_SIZE 16384

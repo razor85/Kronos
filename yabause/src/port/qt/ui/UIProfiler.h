@@ -19,6 +19,8 @@
 #ifndef UIPROFILER_H
 #define UIPROFILER_H
 
+#include <vector>
+
 #include "ui_UIProfiler.h"
 #include "../YabauseThread.h"
 #include "../QtYabause.h"
@@ -35,6 +37,7 @@ public:
 protected:
    YabauseThread *mYabauseThread;
    QStandardItemModel* mItemModel;
+   std::vector<std::string> mRows;
 
    void addRow(u64 count, double timeMs, double percent, u32 ptrH, const QString& description);
 
@@ -44,6 +47,7 @@ protected:
 
 protected slots:
 	 void on_pbClearResults_clicked();
+	 void on_pbExportResults_clicked();
 	 void accept() override;
 	 void reject() override;
 };

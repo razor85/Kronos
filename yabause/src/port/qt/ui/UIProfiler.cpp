@@ -17,13 +17,16 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#include <fstream>
+
 #include "Settings.h"
 #include "UIDebugSH2.h"
 #include "UIProfiler.h"
 
+#include <QFileDialog>
+#include <QMessageBox>
 #include <QProcess>
 #include <QString>
-#include <QPushButton>
 #include <QStandardItemModel>
 
 namespace {
@@ -94,8 +97,38 @@ QString invokeAddr2LineAndFilt(u32 address, const QString& addr2line, const QStr
 
    return "";
 }
+   
+std::pair<double, double> getTotalExecutionTime()
+{
+   double totalMasterTime = 0;
+   double totalSlaveTime = 0;
+   
+   for (u32 i = 0; i < PROFILE_NUM_INFOS; ++i)
+   {
+      SH2_ProfilerInfo* infoM = &MSH2->profilerInfo.profile[i];
+      if (infoM->count > 0)
+      {
+        totalMasterTime += infoM->time;
+      }
+      
+      SH2_ProfilerInfo* infoS = &SSH2->profilerInfo.profile[i];
+      if (infoS->count > 0)
+      {
+        totalSlaveTime += infoS->time;
+      }
+   }
 
+   return { totalMasterTime, totalSlaveTime };
 }
+
+QString addressToHexString(u32 address)
+{
+   return QString("0x%1").arg(address, 8, 16, QChar('0'))
+      .trimmed()
+      .toUpper();
+}
+
+} // namespace ''
 
 UIProfiler::UIProfiler( YabauseThread *yabauseThread, QWidget* p )
 	: QDialog( p )
@@ -137,23 +170,46 @@ UIProfiler::UIProfiler( YabauseThread *yabauseThread, QWidget* p )
    }
 }
    
-void UIProfiler::addRow(u64 count, double timeMs, double percent, u32 ptrH, const QString &description)
+void UIProfiler::addRow( u64 count, double timeMs, double percent, u32 ptrH, const QString &description )
 {
    int row = mItemModel->rowCount();
    mItemModel->insertRow(row);
+   
+   // Qt::UserRole + 1 is used here for sorting
+   
+   QStandardItem* countItem = new QStandardItem(QString::number(count));
+   countItem->setData(timeMs, Qt::UserRole + 1);
+   countItem->setTextAlignment(Qt::AlignCenter);
 
-   // We do that so we can represent the numbers with 2 decimal places but keep their sort value.
    QStandardItem* timeItem = new QStandardItem(QString::number(timeMs, 'f', 2));
    timeItem->setData(timeMs, Qt::UserRole + 1);
+   timeItem->setTextAlignment(Qt::AlignCenter);
 
    QStandardItem* percentItem = new QStandardItem(QString::number(percent, 'f', 2));
-   timeItem->setData(percent, Qt::UserRole + 1);
+   percentItem->setData(percent, Qt::UserRole + 1);
+   percentItem->setTextAlignment(Qt::AlignCenter);
 
-   mItemModel->setItem(row, 0, new QStandardItem(QString::number(count)));
+   const QString pointerString = addressToHexString(ptrH);
+
+   QStandardItem* pointerItem = new QStandardItem(pointerString);
+   pointerItem->setData(pointerString, Qt::UserRole + 1);
+   pointerItem->setTextAlignment(Qt::AlignCenter);
+
+   QStandardItem* descriptionItem = new QStandardItem(description.trimmed());
+   pointerItem->setData(description, Qt::UserRole + 1);
+   pointerItem->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+   mItemModel->setItem(row, 0, countItem);
    mItemModel->setItem(row, 1, timeItem);
    mItemModel->setItem(row, 2, percentItem);
-   mItemModel->setItem(row, 3, new QStandardItem(QString("0x%1").arg(ptrH, 8, 16, QChar('0'))));
-   mItemModel->setItem(row, 4, new QStandardItem(description));
+   mItemModel->setItem(row, 3, pointerItem);
+   mItemModel->setItem(row, 4, descriptionItem);
+
+   QString textRow = QString("%1,%2,%3,%4,%5\n").arg(countItem->text(),
+      timeItem->text(), percentItem->text(), pointerItem->text(),
+      QString("\"%1\"").arg(descriptionItem->text().replace("\"", "\"\"")));
+
+   mRows.push_back(textRow.toStdString());
 }
 
 void UIProfiler::populateTable()
@@ -163,25 +219,16 @@ void UIProfiler::populateTable()
    QString cppfilt = settings->value( "Debug/CppFilt" ).toString();
    QString elfFile = UIDebugSH2::findElfPath();
 
-   double totalMasterTime = 0;
-   double totalSlaveTime = 0;
-   
-   for (u32 i = 0; i < PROFILE_NUM_INFOS; ++i)
-   {
-      SH2_ProfilerInfo* infoM = &MSH2->profilerInfo.profile[i];
-      if (infoM->count > 0)
-      {
-        totalMasterTime += infoM->time;
-      }
-      
-      SH2_ProfilerInfo* infoS = &SSH2->profilerInfo.profile[i];
-      if (infoS->count > 0)
-      {
-        totalSlaveTime += infoS->time;
-      }
-   }
+   const std::pair<double, double> executionTime = getTotalExecutionTime();
+   const double totalMasterTime = executionTime.first;
+   const double totalSlaveTime = executionTime.second;
+
+   lTitle->setText(QString("Total execution time (M/S): %1 / %2 ms").arg(
+      QString::number(totalMasterTime, 'f', 2),
+      QString::number(totalSlaveTime, 'f', 2)));
    
    mItemModel->setRowCount(0);
+   mRows.clear();
    twProfilerResults->setSortingEnabled(false);
 
    for (u32 i = 0; i < PROFILE_NUM_INFOS; ++i)
@@ -213,11 +260,12 @@ void UIProfiler::populateTable()
    }
 
    twProfilerResults->setSortingEnabled(true);
-   twProfilerResults->sortByColumn(1, Qt::DescendingOrder); // Sort by Time(ms)
+   twProfilerResults->sortByColumn(1 /* Time(ms) */, Qt::DescendingOrder);
 }
 
 void UIProfiler::clearTable()
 {
+   lTitle->setText("Total execution time (M/S): 0.00 / 0.00 ms");
    for (u32 i = 0; i < PROFILE_NUM_INFOS; ++i)
    {
       SH2_ProfilerInfo* infoM = &MSH2->profilerInfo.profile[i];
@@ -231,11 +279,38 @@ void UIProfiler::clearTable()
 
    twProfilerResults->setSortingEnabled(false);
    mItemModel->setRowCount(0);
+   mRows.clear();
 }
 
 void UIProfiler::on_pbClearResults_clicked()
 {
    clearTable();
+}
+
+void UIProfiler::on_pbExportResults_clicked()
+{
+   QString fileName = QFileDialog::getSaveFileName(this,
+      tr("Save File"), QString(), tr("CSV (*.csv)"));
+
+   if (!fileName.isEmpty())
+   {
+      const QByteArray utf8 = fileName.toUtf8();
+      std::ofstream outputFile(utf8.data(), std::ios_base::out);
+      if (!outputFile.is_open())
+      {
+         QMessageBox::critical(this, "Error", "Failed to save CSV file.");
+         return;
+      }
+
+      outputFile << "Count,Time(ms),Percent,Ptr(H),Description\n";
+      for (const std::string& row : mRows)
+      {
+         outputFile << row;
+      }
+
+      outputFile << "\n";
+      outputFile.close();
+   }
 }
 
 void UIProfiler::accept()
