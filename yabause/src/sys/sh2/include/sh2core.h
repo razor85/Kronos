@@ -436,10 +436,11 @@ typedef struct
 {
   double time;
   u32 count;
+  u32 address;
 } SH2_ProfilerInfo;
 
 #define PROFILE_STACK_SIZE 16384
-#define PROFILE_NUM_INFOS 0xFFFF
+#define PROFILE_NUM_INFOS (1024 * 1024)
  
 void SH2IntcSetIrl(SH2_struct *sh, u8 irl, u8 d);
 void SH2IntcSetNmi(SH2_struct *sh);
