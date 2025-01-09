@@ -44,10 +44,14 @@ static u8 decryptOn = 0;
 static uint8_t log_buffer[DEV_LOG_SIZE];
 static uint8_t *log_pos = log_buffer;
 
-#define DEBUG_32M_LOG_ADDRESS 0x22000000
-#define DEBUG_32M_CMD_PUSH 0x22000010
-#define DEBUG_32M_CMD_POP 0x22000014
-#define DEBUG_32M_CMD_ADDRESS 0x22000020
+#define DEV_CMD_PUSH 0x1010
+#define DEV_CMD_POP 0x1014
+#define DEV_CMD_ADDRESS 0x1020
+
+enum DevCartridgeCommands {
+   DEV_CMD_ENABLE_PROFILER = 0x00000010,
+   DEV_CMD_DISABLE_PROFILER = 0x00000011,
+};
 
 #define COMMAND_STACK_SIZE 8
 static uint32_t command_stack[COMMAND_STACK_SIZE];
@@ -775,19 +779,6 @@ static u32 FASTCALL DRAM32MBITCs0ReadLong(SH2_struct *context, UNUSED u8* memory
 
 static void FASTCALL DRAM32MBITCs0WriteByte(SH2_struct *context, UNUSED u8* memory, u32 addr, u8 val)
 {
-   if (addr == DEBUG_32M_LOG_ADDRESS) {
-     // Game -> Kronos communication (commands)
-     if ((val == '\n') || (log_pos - log_buffer) >= (DEV_LOG_SIZE - 1))
-     {
-        *log_pos++ = 0; //add \0 character to end the %s
-        YuiMsg("%s\n", log_buffer);
-        log_pos = log_buffer;
-     } else {
-        *log_pos++ = val;
-     }
-     return;
-   }
-
    addr &= 0x1FFFFFF;
 
    switch (addr >> 20)
@@ -826,48 +817,6 @@ static void FASTCALL DRAM32MBITCs0WriteWord(SH2_struct *context, UNUSED u8* memo
 
 static void FASTCALL DRAM32MBITCs0WriteLong(SH2_struct *context, UNUSED u8* memory, u32 addr, u32 val)
 {
-   switch (addr) {
-   case DEBUG_32M_CMD_PUSH:
-     if (command_stack_pointer < (COMMAND_STACK_SIZE - 1)) {
-        command_stack[command_stack_pointer++] = val;
-     } else {
-        YuiMsg("Failed to push command stack, command stack limit reached\n");
-     }
-     return;
-
-   case DEBUG_32M_CMD_POP:
-     if (command_stack_pointer > 0) {
-        --command_stack_pointer;
-     } else {
-        YuiMsg("Failed to pop command stack, command stack limit reached\n");
-     }
-     return;
-
-   case DEBUG_32M_CMD_ADDRESS:
-      // Game -> Kronos communication (commands)
-      switch (val) {
-      case 0x00000010:
-         context->profilerInfo.profilerEnabled = 1;
-         if (command_stack_pointer >= 2) {
-            context->profilerInfo.startMonitorAddress = command_stack[0];
-            context->profilerInfo.endMonitorAddress = command_stack[1];
-         }
-         YuiMsg("Enabled profiler mode (from 0x%X to 0x%X)\n",
-           context->profilerInfo.startMonitorAddress, context->profilerInfo.endMonitorAddress);
-         break;
-      case 0x00000011:
-         context->profilerInfo.profilerEnabled = 0;
-         YuiMsg("Disabled profiler mode\n");
-         break;
-      default:
-         break;
-      }
-      return;
-
-   default:
-      break;
-   }
-
    addr &= 0x1FFFFFF;
 
    switch (addr >> 20)
@@ -948,6 +897,50 @@ static void FASTCALL DevCs1WriteWord(SH2_struct *context, UNUSED u8* memory, u32
 
 static void FASTCALL DevCs1WriteLong(SH2_struct *context, UNUSED u8* memory, u32 addr, u32 val)
 {
+   addr &= 0x1FFFFFF;
+
+   switch (addr) {
+   case DEV_CMD_PUSH:
+      if (command_stack_pointer < (COMMAND_STACK_SIZE - 1)) {
+         command_stack[command_stack_pointer++] = val;
+      } else {
+         YuiMsg("Failed to push command stack, command stack limit reached\n");
+      }
+      return;
+
+   case DEV_CMD_POP:
+      if (command_stack_pointer > 0) {
+         --command_stack_pointer;
+      } else {
+         YuiMsg("Failed to pop command stack, command stack limit reached\n");
+      }
+      return;
+
+   case DEV_CMD_ADDRESS:
+      // Game -> Kronos communication (commands)
+      switch (val) {
+      case DEV_CMD_ENABLE_PROFILER:
+         context->profilerInfo.profilerEnabled = 1;
+         if (command_stack_pointer >= 2) {
+            context->profilerInfo.startMonitorAddress = command_stack[0];
+            context->profilerInfo.endMonitorAddress = command_stack[1];
+         }
+         YuiMsg("Enabled profiler mode (from 0x%X to 0x%X)\n",
+           context->profilerInfo.startMonitorAddress, context->profilerInfo.endMonitorAddress);
+         break;
+      case DEV_CMD_DISABLE_PROFILER:
+         context->profilerInfo.profilerEnabled = 0;
+         YuiMsg("Disabled profiler mode\n");
+         break;
+
+      default:
+         break;
+      }
+      return;
+
+   default:
+      break;
+   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1683,6 +1676,7 @@ int CartInit(const char * filename, int type)
         CartridgeArea->Cs1ReadLong = &DevCs1ReadLong;
         CartridgeArea->Cs1WriteByte = &DevCs1WriteByte;
         CartridgeArea->Cs1WriteWord = &DevCs1WriteWord;
+        CartridgeArea->Cs1WriteLong = &DevCs1WriteLong;
 
          if ((CartridgeArea->dram = T1MemoryInit(0x400000)) == NULL)
               return -1;
@@ -1697,8 +1691,6 @@ int CartInit(const char * filename, int type)
          CartridgeArea->Cs0WriteWord = &DRAM32MBITCs0WriteWord;
          CartridgeArea->Cs0WriteLong = &DRAM32MBITCs0WriteLong;
          break;
-        CartridgeArea->Cs1WriteLong = &DevCs1WriteLong;
-        break;
       }
 
       default: // No Cart
